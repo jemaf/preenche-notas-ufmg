@@ -1,0 +1,21 @@
+version: '3'
+services:
+  selenium-server:
+    image: selenium/standalone-firefox:latest
+    container_name: selenium-server
+    ports:
+      - "4444:4444"
+      - "5900:5900"
+    expose:
+      - 4444
+      - 5900
+
+  preenche-notas:
+    build: .
+    container_name: preenche-notas
+    volumes:
+      - ./csv/:/storage/
+      - ./main.py:/app/main.py
+    depends_on:
+      - selenium-server
+    entrypoint: ["/app/venv/bin/python", "main.py", "/storage/notas.csv"]

@@ -45,6 +45,41 @@ Sempre mantenha um terminal aberto. O mesmo vai perguntar para você qual é a t
 
 [![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/Z7yhH-4r8YI/0.jpg)](https://www.youtube.com/watch?v=Z7yhH-4r8YI)
 
+### Utilizando com Docker
+
+Para facilitar a execução do script, foi criado um ambiente em Docker para rodar o script em qualquer configuração de hardware.
+Esse script contém todas as dependências necessárias para rodar o script, incluindo um navegador (Firefox) e seu driver (GeckoDriver).
+
+#### Pré-requisitos
+
+- Docker instalado na máquina.
+- VNC client para visualizar o navegador. `sudo apt-get install tigervnc-viewer`. 
+
+#### Passo-a-passo
+
+1. Inicie o servidor do Selenium.
+
+```bash
+$ docker-compose up -d selenium-server
+```
+
+2. Abra o navegador virtual para visualizar o Selenium em funcionamento. Caso lhe pergunte a senha, a mesma é `secret`.
+
+```bash
+$ vncviewer localhost:5900
+```
+
+3. Copie o arquivo `notas.csv` para a pasta `csv` do projeto. É do arquivo neste diretório que o script irá ler as notas. **O arquivo deverá se chamar `notas.csv`**.
+
+```bash
+$ cp /caminho/para/arquivo.csv ./csv/notas.csv
+```
+
+4. Execute o container do script.
+
+```bash
+$ docker-compose up preenche-notas
+```
 
 ## Formato dos Dados
 

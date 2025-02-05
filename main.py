@@ -3,6 +3,8 @@
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from selenium.webdriver.firefox.options import Options
 
 import click
 import pandas as pd
@@ -50,6 +52,7 @@ NOTAS = URL +\
 @click.argument('arquivo_notas')
 def main(usuario, senha, arquivo_notas):
 
+
     # Pouco de programacao defensiva
     print('Lendo o arquivo')
     try:
@@ -70,7 +73,11 @@ def main(usuario, senha, arquivo_notas):
 
     # Inicia selenium
     print('Iniciando selenium')
-    driver = webdriver.Firefox()
+    options = Options()
+    driver = webdriver.Remote(
+        command_executor='http://selenium-server:4444/wd/hub',
+        options=options
+    )
     driver.get(URL)
 
     # Logando
