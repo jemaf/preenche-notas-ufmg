@@ -18,4 +18,4 @@ services:
       - ./main.py:/app/main.py
     depends_on:
       - selenium-server
-    entrypoint: ["/app/venv/bin/python", "main.py", "/storage/notas.csv"]
+    entrypoint: ["/app/venv/bin/python", "main.py", "cronograma", "/storage/cronograma.csv"]

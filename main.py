@@ -5,9 +5,19 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.service import Service as FirefoxService
 from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 import click
 import pandas as pd
+import time
+
+URL = 'https://sistemas.ufmg.br/diario/'
+NOTAS = URL +\
+    'notaTurma/notaAvaliacao/solicitar/solicitarNota.do' +\
+    '?acao=lancarAvaliacaoCompleta'
+CRONOGRAMA = URL +\
+    'planoAula/cronogramaAula/solicitar/solicitarCronogramaAula.do'
 
 
 def parse_turmas(form):
@@ -38,21 +48,36 @@ def pega_turma(turmas):
     valor_form = turmas[nome_turma]
     return valor_form
 
+def iniciar_selenium(usuario, senha):
+    print('Iniciando selenium')
+    options = Options()
+    driver = webdriver.Remote(
+        command_executor='http://selenium-server:4444/wd/hub',
+        options=options
+    )
+    driver.implicitly_wait(10)  # Set implicit wait time to 1 second
+    driver.get(URL)
 
-URL = 'https://sistemas.ufmg.br/diario/'
-NOTAS = URL +\
-    'notaTurma/notaAvaliacao/solicitar/solicitarNota.do' +\
-    '?acao=lancarAvaliacaoCompleta'
+    # Logando
+    username = driver.find_element(By.ID, 'j_username')
+    password = driver.find_element(By.ID, 'j_password')
 
+    username.send_keys(usuario)
+    password.send_keys(senha)
+    driver.find_element(By.NAME, 'submit').click()
+    
+    return driver
+
+
+@click.group()
+def cli():
+    pass
 
 @click.command()
 @click.option('--usuario', prompt='Digite seu login')
-@click.option('--senha', prompt='Digite sua senha',
-              hide_input=True)
+@click.option('--senha', prompt='Digite sua senha', hide_input=True)
 @click.argument('arquivo_notas')
-def main(usuario, senha, arquivo_notas):
-
-
+def notas(usuario, senha, arquivo_notas):
     # Pouco de programacao defensiva
     print('Lendo o arquivo')
     try:
@@ -72,21 +97,7 @@ def main(usuario, senha, arquivo_notas):
         raise e
 
     # Inicia selenium
-    print('Iniciando selenium')
-    options = Options()
-    driver = webdriver.Remote(
-        command_executor='http://selenium-server:4444/wd/hub',
-        options=options
-    )
-    driver.get(URL)
-
-    # Logando
-    username = driver.find_element(By.ID, 'j_username')
-    password = driver.find_element(By.ID, 'j_password')
-
-    username.send_keys(usuario)
-    password.send_keys(senha)
-    driver.find_element(By.NAME, 'submit').click()
+    driver = iniciar_selenium(usuario, senha)
 
     # Form de turmas
     form_turma = driver.find_element(By.NAME, 'turma')
@@ -138,6 +149,102 @@ def main(usuario, senha, arquivo_notas):
     except Exception:
         pass
 
+@click.command()
+@click.option('--usuario', prompt='Digite seu login')
+@click.option('--senha', prompt='Digite sua senha', hide_input=True)
+@click.option('--clean', is_flag=True, default=True)
+@click.argument('arquivo_frequencia')
+def cronograma(usuario, senha, clean, arquivo_frequencia):
+    print('Lendo o arquivo')
+    try:
+        df = pd.read_csv(
+            arquivo_frequencia,
+            header=0, index_col=None, dtype=str
+        )
+        df['Data'] = pd.to_datetime(df['Data'], format='%d/%m/%Y')
+        df['Início'] = pd.to_datetime(df['Início'], format='%H:%M').dt.time
+        df['Término'] = pd.to_datetime(df['Término'], format='%H:%M').dt.time
+        df = df.fillna('0')
+        df = df[df['#'].str.strip() != '0']  # Filtra as linhas válidas
+    except Exception as e:
+        print('Arquivo no formato errado.')
+        print('Preciso de csv com as colunas: Data, Início, Término, Qtd, Tipo')
+        raise e
+    
+    # Confirmação para prosseguir
+    print(f'O arquivo contém {len(df)} linhas válidas.')
+    confirm = input('Deseja continuar? (s/n): ')
+    if confirm.lower() != 's':
+        print('Operação cancelada.')
+        return
+    
+    # Inicia selenium
+    driver = iniciar_selenium(usuario, senha)
+    
+    # Form de turmas
+    form_turma = driver.find_element(By.NAME, 'turma')
+    turmas = parse_turmas(form_turma)
+    escolha_turma = pega_turma(turmas)
+    escolha_turma.click()
+
+    driver.get(CRONOGRAMA)
+    
+    print("Antes de continuar, exclua TODOS os registros de aula.")
+    input("Pressione qualquer tecla para continuar")
+        
+    # recupera componentes do formulário
+    data_field = driver.find_element(By.XPATH, '//*[@id="data"]')
+    inicio_field = driver.find_element(By.XPATH, '//*[@id="form_lancar"]/table[5]/tbody/tr[5]/td[1]/input')
+    termino_field = driver.find_element(By.XPATH, '//*[@id="form_lancar"]/table[5]/tbody/tr[5]/td[2]/input')
+    qtd_field = driver.find_element(By.XPATH, '//*[@id="form_lancar"]/table[5]/tbody/tr[7]/td[1]/input')
+    type_field = driver.find_element(By.XPATH, '//*[@id="form_lancar"]/table[5]/tbody/tr[7]/td[2]/select')
+    assunto_field = driver.find_element(By.XPATH, '//*[@id="assunto"]')
+    btn_include = driver.find_element(By.XPATH, '//*[@id="botaoIncluirAlterar"]/input')
+        
+    # cadastra cada uma das datas do arquivo no cronograma
+    for _, row in df.iterrows():
+        data_field.clear()
+        data_field.send_keys(row['Data'].strftime('%d/%m/%Y'))
+        time.sleep(0.5)
+        
+        inicio_field.clear()
+        inicio_field.send_keys(row['Início'].strftime('%H:%M'))
+        time.sleep(0.1)
+        
+        termino_field.clear()
+        termino_field.send_keys(row['Término'].strftime('%H:%M'))
+        time.sleep(0.1)
+        
+        qtd_field.clear()
+        qtd_field.send_keys(str(row['Qtd']))
+        time.sleep(0.1)
+        
+        assunto_field.clear()
+        assunto_field.send_keys(str(row['Assunto']))
+        time.sleep(0.1)
+        # Seleciona o tipo de aula
+        for option in type_field.find_elements(By.TAG_NAME, 'option'):
+            if option.text == row['Tipo']:
+                option.click()
+                break
+        time.sleep(0.1)
+        
+        btn_include.click()
+        WebDriverWait(driver, 10).until(
+            EC.invisibility_of_element_located((By.XPATH, '//*[@id="aguarde"]'))
+        )
+        
+    print('Antes de fechar o script, ', end='')
+    print('verifique tudo e salve as notas no browser.')
+    print('Depois, digite qq coisa aqui para terminar')
+    input()
+    try:
+        driver.close()
+    except Exception:
+        pass
+
+cli.add_command(notas)
+cli.add_command(cronograma)
 
 if __name__ == '__main__':
-    main()
+    cli()
